@@ -1,5 +1,7 @@
 package com.example.wyry.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -25,7 +27,19 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val vuMeter by viewModel.vuMeter.collectAsState()
     val config by viewModel.streamConfig.collectAsState()
     val micVolume by viewModel.micVolume.collectAsState()
+    val micEnabled by viewModel.micEnabled.collectAsState()
     val musicVolume by viewModel.musicVolume.collectAsState()
+    val currentSongTitle by viewModel.currentSongTitle.collectAsState()
+    val isMusicPlaying by viewModel.isMusicPlaying.collectAsState()
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+        onResult = { uris ->
+            if (uris.isNotEmpty()) {
+                viewModel.playMusic(uris)
+            }
+        }
+    )
 
     Scaffold(
         topBar = {
@@ -63,8 +77,32 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // Mixing Sliders
-            VolumeSlider("Microfone", micVolume) { viewModel.setMicVolume(it) }
-            VolumeSlider("Música", musicVolume) { viewModel.setMusicVolume(it) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.weight(1f)) {
+                    VolumeSlider("Microfone", micVolume, micEnabled) { viewModel.setMicVolume(it) }
+                }
+                IconButton(onClick = { viewModel.toggleMic() }) {
+                    Icon(
+                        if (micEnabled) Icons.Default.Mic else Icons.Default.MicOff,
+                        contentDescription = null,
+                        tint = if (micEnabled) MaterialTheme.colorScheme.primary else Color.Gray
+                    )
+                }
+            }
+            
+            VolumeSlider("Música", musicVolume, true) { viewModel.setMusicVolume(it) }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Music Player Controls
+            MusicPlayerSection(
+                currentTitle = currentSongTitle,
+                isPlaying = isMusicPlaying,
+                onSelectMusic = { launcher.launch(arrayOf("audio/*")) },
+                onTogglePlay = { viewModel.toggleMusic() },
+                onNext = { viewModel.nextSong() },
+                onPrevious = { viewModel.previousSong() }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -131,15 +169,82 @@ fun StreamingControls(isStreaming: Boolean, onToggle: () -> Unit) {
 }
 
 @Composable
-fun VolumeSlider(label: String, value: Float, onValueChange: (Float) -> Unit) {
+fun MusicPlayerSection(
+    currentTitle: String?,
+    isPlaying: Boolean,
+    onSelectMusic: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
+    ) {
+        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Playlist", color = Color.White, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = currentTitle ?: "Nenhuma música selecionada",
+                color = if (currentTitle != null) Color.Green else Color.Gray,
+                fontSize = 14.sp,
+                maxLines = 1
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                IconButton(onClick = onPrevious) {
+                    Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White)
+                }
+                
+                Button(
+                    onClick = onTogglePlay,
+                    modifier = Modifier.size(56.dp),
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = null
+                    )
+                }
+                
+                IconButton(onClick = onNext) {
+                    Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            OutlinedButton(
+                onClick = onSelectMusic,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.LibraryMusic, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Selecionar Músicas")
+            }
+        }
+    }
+}
+
+@Composable
+fun VolumeSlider(label: String, value: Float, enabled: Boolean = true, onValueChange: (Float) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(label, color = Color.White)
+        Text(label, color = if (enabled) Color.White else Color.Gray)
         Slider(
             value = value,
             onValueChange = onValueChange,
+            enabled = enabled,
             colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary
+                thumbColor = if (enabled) MaterialTheme.colorScheme.primary else Color.Gray,
+                activeTrackColor = if (enabled) MaterialTheme.colorScheme.primary else Color.DarkGray
             )
         )
     }

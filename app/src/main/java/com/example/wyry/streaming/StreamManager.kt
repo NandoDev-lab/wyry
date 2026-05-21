@@ -26,8 +26,8 @@ class StreamManager(private val context: Context) {
         }
 
         val url = "icecast://${config.user}:${config.pass}@${config.host}:${config.port}${config.mountpoint}"
-        // Added -content_type and explicit mp3 format
-        val command = "-f s16le -ar 44100 -ac 1 -i $pipePath -c:a libmp3lame -b:a ${config.bitrate}k -content_type audio/mpeg -f mp3 $url"
+        // Parâmetros reorganizados para maior estabilidade com o servidor
+        val command = "-f s16le -ar 44100 -ac 1 -i $pipePath -c:a libmp3lame -b:a ${config.bitrate}k -legacy_icecast 1 -content_type audio/mpeg -ice_name \"Adoradores Studio\" -tune zerolatency -preset ultrafast -f mp3 $url"
 
         status.value = "Conectando..."
         
