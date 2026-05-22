@@ -38,6 +38,10 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
     val micVolume by viewModel.micVolume.collectAsState()
     val micEnabled by viewModel.micEnabled.collectAsState()
     val musicVolume by viewModel.musicVolume.collectAsState()
+    val echoEnabled by viewModel.echoEnabled.collectAsState()
+    val echoLevel by viewModel.echoLevel.collectAsState()
+    val boostEnabled by viewModel.boostEnabled.collectAsState()
+    val gateEnabled by viewModel.gateEnabled.collectAsState()
     val currentSongTitle by viewModel.currentSongTitle.collectAsState()
     val isMusicPlaying by viewModel.isMusicPlaying.collectAsState()
     val playlist by viewModel.playlist.collectAsState()
@@ -140,6 +144,66 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
                     onToggle = null,
                     icon = Icons.Default.MusicNote
                 )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Voice FX Section
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Processamento de Voz", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        // 1. Voice Boost
+                        EffectToggle(
+                            label = "RADIO PUNCH",
+                            enabled = boostEnabled,
+                            onToggle = { viewModel.toggleBoost() },
+                            icon = Icons.Default.Campaign
+                        )
+                        // 2. Noise Gate
+                        EffectToggle(
+                            label = "NOISE GATE",
+                            enabled = gateEnabled,
+                            onToggle = { viewModel.toggleGate() },
+                            icon = Icons.Default.FilterAlt
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 3. Echo / Delay
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.GraphicEq, 
+                                contentDescription = null, 
+                                tint = if (echoEnabled) MaterialTheme.colorScheme.primary else Color.Gray
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("ECHO / DELAY", color = Color.White, fontSize = 14.sp)
+                        }
+                        Switch(checked = echoEnabled, onCheckedChange = { viewModel.toggleEcho() })
+                    }
+                    if (echoEnabled) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("INTENSIDADE", color = Color.Gray, fontSize = 10.sp, modifier = Modifier.width(80.dp))
+                            Slider(
+                                value = echoLevel,
+                                onValueChange = { viewModel.setEchoLevel(it) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -459,6 +523,26 @@ fun StreamingControls(isStreaming: Boolean, status: String, countdown: Int, onTo
                 letterSpacing = 1.sp
             )
         }
+    }
+}
+
+@Composable
+fun EffectToggle(
+    label: String,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        FilledTonalIconButton(
+            onClick = onToggle,
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = if (enabled) MaterialTheme.colorScheme.primaryContainer else Color.DarkGray
+            )
+        ) {
+            Icon(icon, contentDescription = null, tint = if (enabled) MaterialTheme.colorScheme.primary else Color.Gray)
+        }
+        Text(label, color = Color.Gray, fontSize = 8.sp, fontWeight = FontWeight.Bold)
     }
 }
 
