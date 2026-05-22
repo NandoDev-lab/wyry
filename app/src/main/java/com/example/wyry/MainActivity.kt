@@ -10,7 +10,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.wyry.ui.MainScreen
+import com.example.wyry.ui.MainViewModel
+import com.example.wyry.ui.SettingsScreen
 import com.example.wyry.ui.theme.WyryTheme
 
 class MainActivity : ComponentActivity() {
@@ -23,7 +29,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             WyryTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    MainScreen()
+                    val navController = rememberNavController()
+                    val viewModel: MainViewModel = viewModel()
+                    
+                    NavHost(navController = navController, startDestination = "main") {
+                        composable("main") {
+                            MainScreen(
+                                viewModel = viewModel,
+                                onNavigateToSettings = { navController.navigate("settings") }
+                            )
+                        }
+                        composable("settings") {
+                            SettingsScreen(
+                                viewModel = viewModel,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                    }
                 }
             }
         }

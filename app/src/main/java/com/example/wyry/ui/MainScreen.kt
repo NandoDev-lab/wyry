@@ -13,6 +13,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,11 +25,10 @@ import com.example.wyry.data.StreamConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel = viewModel()) {
+fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
     val isStreaming by viewModel.isStreaming.collectAsState()
     val status by viewModel.status.collectAsState()
     val vuMeter by viewModel.vuMeter.collectAsState()
-    val config by viewModel.streamConfig.collectAsState()
     val micVolume by viewModel.micVolume.collectAsState()
     val micEnabled by viewModel.micEnabled.collectAsState()
     val musicVolume by viewModel.musicVolume.collectAsState()
@@ -45,6 +48,11 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Adoradores Preparados Studio") },
+                actions = {
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Configurações")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.primary
@@ -66,31 +74,63 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // VU Meter
-            VuMeter(vuMeter)
+            // Studio Mixer Section
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .height(250.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Vertical Mic Control
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        VerticalVolumeSlider(
+                            value = micVolume,
+                            enabled = micEnabled,
+                            onValueChange = { viewModel.setMicVolume(it) }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        IconButton(onClick = { viewModel.toggleMic() }) {
+                            Icon(
+                                if (micEnabled) Icons.Default.Mic else Icons.Default.MicOff,
+                                contentDescription = null,
+                                tint = if (micEnabled) MaterialTheme.colorScheme.primary else Color.Gray
+                            )
+                        }
+                        Text("MIC", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Vertical VU Meter
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        VerticalVuMeter(vuMeter)
+                        Spacer(modifier = Modifier.height(48.dp)) // Alinhamento com os botões
+                        Text("LEVEL", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Vertical Music Control
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        VerticalVolumeSlider(
+                            value = musicVolume,
+                            onValueChange = { viewModel.setMusicVolume(it) }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        IconButton(onClick = { launcher.launch(arrayOf("audio/*")) }) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                        Text("MUSIC", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Controls
             StreamingControls(isStreaming) { viewModel.toggleStream() }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Mixing Sliders
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.weight(1f)) {
-                    VolumeSlider("Microfone", micVolume, micEnabled) { viewModel.setMicVolume(it) }
-                }
-                IconButton(onClick = { viewModel.toggleMic() }) {
-                    Icon(
-                        if (micEnabled) Icons.Default.Mic else Icons.Default.MicOff,
-                        contentDescription = null,
-                        tint = if (micEnabled) MaterialTheme.colorScheme.primary else Color.Gray
-                    )
-                }
-            }
-            
-            VolumeSlider("Música", musicVolume, true) { viewModel.setMusicVolume(it) }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -103,11 +143,67 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onNext = { viewModel.nextSong() },
                 onPrevious = { viewModel.previousSong() }
             )
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(24.dp))
+@Composable
+fun VerticalVolumeSlider(
+    value: Float,
+    enabled: Boolean = true,
+    onValueChange: (Float) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .width(40.dp)
+            .height(180.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = enabled,
+            modifier = Modifier
+                .width(180.dp)
+                .graphicsLayer {
+                    rotationZ = 270f
+                },
+            colors = SliderDefaults.colors(
+                thumbColor = if (enabled) MaterialTheme.colorScheme.primary else Color.Gray,
+                activeTrackColor = if (enabled) MaterialTheme.colorScheme.primary else Color.DarkGray
+            )
+        )
+    }
+}
 
-            // Config Form
-            ConfigForm(config) { viewModel.updateConfig(it) }
+@Composable
+fun VerticalVuMeter(value: Float) {
+    val barCount = 20
+    val activeBars = (value * barCount).roundToInt().coerceIn(0, barCount)
+    
+    Column(
+        modifier = Modifier
+            .width(24.dp)
+            .height(180.dp)
+            .background(Color.Black, shape = MaterialTheme.shapes.small)
+            .padding(2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.Bottom)
+    ) {
+        for (i in barCount downTo 1) {
+            val color = when {
+                i > 17 -> Color.Red
+                i > 14 -> Color.Yellow
+                else -> Color.Green
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(
+                        if (i <= activeBars) color else color.copy(alpha = 0.2f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(1.dp)
+                    )
+            )
         }
     }
 }
@@ -134,21 +230,6 @@ fun StatusIndicator(isStreaming: Boolean, status: String) {
             color = Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp
-        )
-    }
-}
-
-@Composable
-fun VuMeter(value: Float) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text("VU Meter", color = Color.Gray, fontSize = 12.sp)
-        LinearProgressIndicator(
-            progress = { value.coerceIn(0f, 1f) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp),
-            color = if (value > 0.8f) Color.Red else Color.Green,
-            trackColor = Color.DarkGray,
         )
     }
 }
@@ -230,75 +311,6 @@ fun MusicPlayerSection(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Selecionar Músicas")
             }
-        }
-    }
-}
-
-@Composable
-fun VolumeSlider(label: String, value: Float, enabled: Boolean = true, onValueChange: (Float) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(label, color = if (enabled) Color.White else Color.Gray)
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            enabled = enabled,
-            colors = SliderDefaults.colors(
-                thumbColor = if (enabled) MaterialTheme.colorScheme.primary else Color.Gray,
-                activeTrackColor = if (enabled) MaterialTheme.colorScheme.primary else Color.DarkGray
-            )
-        )
-    }
-}
-
-@Composable
-fun ConfigForm(config: StreamConfig, onConfigChange: (StreamConfig) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Configuração do Servidor", color = Color.White, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = config.host,
-                onValueChange = { onConfigChange(config.copy(host = it)) },
-                label = { Text("Host") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Row(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = config.port.toString(),
-                    onValueChange = { onConfigChange(config.copy(port = it.toIntOrNull() ?: 8000)) },
-                    label = { Text("Porta") },
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = config.bitrate.toString(),
-                    onValueChange = { onConfigChange(config.copy(bitrate = it.toIntOrNull() ?: 128)) },
-                    label = { Text("Bitrate") },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            OutlinedTextField(
-                value = config.user,
-                onValueChange = { onConfigChange(config.copy(user = it)) },
-                label = { Text("Usuário") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = config.pass,
-                onValueChange = { onConfigChange(config.copy(pass = it)) },
-                label = { Text("Senha") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = config.mountpoint,
-                onValueChange = { onConfigChange(config.copy(mountpoint = it)) },
-                label = { Text("Mountpoint") },
-                modifier = Modifier.fillMaxWidth()
-            )
         }
     }
 }
