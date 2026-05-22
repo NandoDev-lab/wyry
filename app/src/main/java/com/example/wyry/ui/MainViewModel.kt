@@ -75,6 +75,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var isReconnecting = false
+    private val MAX_RETRY = 5
+    private var retryCount = 0
+
     private fun startStreaming() {
         val context = getApplication<Application>()
         val intent = Intent(context, StreamingService::class.java)
@@ -84,7 +88,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             context.startService(intent)
         }
 
-        // Always start capture to provide a hardware-based timing clock
         audioProcessor.startCapture()
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -95,8 +98,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             var musicStoreHead = 0
             var musicStoreTail = 0
 
+            // Parâmetros do Ducking
+            var currentDuckFactor = 1.0f
+            val duckThreshold = 0.05f // Sensibilidade (0.0 a 1.0)
+            val duckVolume = 0.2f // Volume da música quando houver fala (20%)
+            val fadeSpeed = 0.05f // Velocidade da transição suave
+
             while (isStreaming.value) {
-                // AudioRecord.read will block the loop and maintain 44.1kHz cadence
                 val read = audioProcessor.read(micBuffer)
                 
                 if (read <= 0) {
@@ -106,8 +114,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 val actualRead = if (read > 0) read else 1024
                 val mixedBuffer = ShortArray(actualRead)
-                val micVol = if (_micEnabled.value) _micVolume.value else 0f
-                val musVol = _musicVolume.value
+                
+                val micEnabled = _micEnabled.value
+                val micVol = if (micEnabled) _micVolume.value else 0f
+                val baseMusVol = _musicVolume.value
+
+                // Lógica de Ducking Automático
+                val isSpeaking = micEnabled && vuMeter.value > duckThreshold
+                if (isSpeaking) {
+                    // Abaixa o volume rapidamente (Ducking)
+                    if (currentDuckFactor > duckVolume) {
+                        currentDuckFactor -= fadeSpeed * 2 
+                    }
+                } else {
+                    // Restaura o volume gradualmente
+                    if (currentDuckFactor < 1.0f) {
+                        currentDuckFactor += fadeSpeed 
+                    }
+                }
+                currentDuckFactor = currentDuckFactor.coerceIn(duckVolume, 1.0f)
+                val finalMusVol = baseMusVol * currentDuckFactor
 
                 while ((musicStoreTail - musicStoreHead + 8192) % 8192 < actualRead) {
                     val chunk = musicPlayer.pcmQueue.poll()
@@ -124,13 +150,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 for (i in 0 until actualRead) {
                     val micSample = (if (read > 0) micBuffer[i] else 0) * micVol
-                    val musSample = musicStore[musicStoreHead] * musVol
+                    val musSample = musicStore[musicStoreHead] * finalMusVol
                     musicStoreHead = (musicStoreHead + 1) % 8192
                     
                     mixedBuffer[i] = (micSample + musSample).coerceIn(-32768f, 32767f).toInt().toShort()
                 }
 
                 streamManager.writeAudio(mixedBuffer, actualRead)
+            }
+
+            // Lógica de Reconexão Automática
+            if (!isStreaming.value && !isReconnecting && retryCount < MAX_RETRY && status.value != "Desconectado") {
+                isReconnecting = true
+                retryCount++
+                streamManager.status.value = "Reconectando ($retryCount/$MAX_RETRY)..."
+                kotlinx.coroutines.delay(5000)
+                isReconnecting = false
+                startStreaming()
+            } else if (status.value == "Desconectado") {
+                retryCount = 0
             }
         }
     }
