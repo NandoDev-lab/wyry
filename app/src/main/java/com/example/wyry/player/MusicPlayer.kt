@@ -3,17 +3,21 @@ package com.example.wyry.player
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import kotlinx.coroutines.flow.MutableStateFlow
-
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class MusicPlayer(context: Context) {
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val pcmOutProcessor = PcmOutAudioProcessor()
     
     private val renderersFactory = object : DefaultRenderersFactory(context) {
@@ -34,9 +38,22 @@ class MusicPlayer(context: Context) {
     
     val currentSongTitle = MutableStateFlow<String?>(null)
     val isPlaying = MutableStateFlow(false)
+    val currentPosition = MutableStateFlow(0L)
+    val duration = MutableStateFlow(0L)
     val pcmQueue = pcmOutProcessor.pcmQueue
+    val vuMeter = pcmOutProcessor.vuMeter
 
     init {
+        scope.launch {
+            while (true) {
+                if (player.isPlaying) {
+                    currentPosition.value = player.currentPosition
+                    duration.value = player.duration
+                }
+                delay(1000)
+            }
+        }
+
         player.addListener(object : Player.Listener {
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
                 currentSongTitle.value = mediaMetadata.title?.toString() ?: "Desconhecido"
@@ -57,6 +74,11 @@ class MusicPlayer(context: Context) {
                 .build()
         }
         player.setMediaItems(mediaItems)
+        
+        if (uris.size > 1) {
+            player.repeatMode = Player.REPEAT_MODE_OFF
+        }
+
         player.prepare()
     }
 

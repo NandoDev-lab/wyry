@@ -4,9 +4,11 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.audio.AudioProcessor.EMPTY_BUFFER
 import androidx.media3.common.util.UnstableApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.LinkedBlockingQueue
+import kotlin.math.abs
 
 @UnstableApi
 class PcmOutAudioProcessor : AudioProcessor {
@@ -17,6 +19,7 @@ class PcmOutAudioProcessor : AudioProcessor {
     private var outputBuffer: ByteBuffer = EMPTY_BUFFER
 
     val pcmQueue = LinkedBlockingQueue<ShortArray>(100)
+    val vuMeter = MutableStateFlow(0f)
 
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
         if (inputAudioFormat.encoding != androidx.media3.common.C.ENCODING_PCM_16BIT) {
@@ -58,6 +61,19 @@ class PcmOutAudioProcessor : AudioProcessor {
             pcmQueue.poll()
             pcmQueue.offer(monoShorts)
         }
+
+        // Calculate Music VU (Peak detection with perceptual scaling)
+        var max = 0f
+        for (sample in monoShorts) {
+            val absValue = abs(sample.toInt()).toFloat()
+            if (absValue > max) max = absValue
+        }
+        
+        val normalized = max / 32768f
+        val visibleLevel = kotlin.math.sqrt(normalized) * 1.1f
+        
+        // Aplica o valor com uma pequena inércia para suavidade visual
+        vuMeter.value = (vuMeter.value * 0.15f) + (visibleLevel.coerceIn(0f, 1f) * 0.85f)
 
         // 2. Devolve o áudio original para o ExoPlayer tocar nos alto-falantes
         if (buffer.capacity() < remaining) {
