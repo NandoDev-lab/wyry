@@ -16,7 +16,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val audioProcessor = AudioProcessor()
@@ -25,8 +24,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val streamManager = StreamManager(application)
     private val repository = SettingsRepository(application)
 
-    private val _streamConfig = MutableStateFlow(StreamConfig())
-    val streamConfig: StateFlow<StreamConfig> = _streamConfig.asStateFlow()
+    private val _profiles = MutableStateFlow<List<StreamConfig>>(emptyList())
+    val profiles: StateFlow<List<StreamConfig>> = _profiles.asStateFlow()
+
+    private val _selectedProfile = MutableStateFlow<StreamConfig?>(null)
+    val selectedProfile: StateFlow<StreamConfig?> = _selectedProfile.asStateFlow()
 
     private val _playlist = MutableStateFlow<List<Uri>>(emptyList())
     val playlist: StateFlow<List<Uri>> = _playlist.asStateFlow()
@@ -69,12 +71,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            repository.streamConfigFlow.collectLatest { config ->
-                _streamConfig.value = config
-            }
+            combine(repository.profilesFlow, repository.selectedProfileIdFlow) { profiles, selectedId ->
+                _profiles.value = profiles
+                _selectedProfile.value = profiles.find { it.id == selectedId } ?: profiles.firstOrNull()
+            }.collect()
         }
         
-        // Monitora se a vinheta terminou de tocar
         viewModelScope.launch {
             vignettePlayer.isPlaying.collectLatest { playing ->
                 _isVignettePlaying.value = playing
@@ -82,10 +84,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateConfig(config: StreamConfig) {
-        _streamConfig.value = config
+    fun selectProfile(profile: StreamConfig) {
         viewModelScope.launch {
-            repository.saveConfig(config)
+            repository.selectProfile(profile.id)
+        }
+    }
+
+    fun addProfile(name: String) {
+        val newProfile = StreamConfig(name = name)
+        val newList = _profiles.value + newProfile
+        saveProfiles(newList)
+        selectProfile(newProfile)
+    }
+
+    fun updateProfile(updated: StreamConfig) {
+        val newList = _profiles.value.map { if (it.id == updated.id) updated else it }
+        saveProfiles(newList)
+    }
+
+    fun deleteProfile(profile: StreamConfig) {
+        if (_profiles.value.size <= 1) return
+        val newList = _profiles.value.filter { it.id != profile.id }
+        saveProfiles(newList)
+        if (_selectedProfile.value?.id == profile.id) {
+            selectProfile(newList.first())
+        }
+    }
+
+    private fun saveProfiles(list: List<StreamConfig>) {
+        viewModelScope.launch {
+            repository.saveProfiles(list)
         }
     }
 
@@ -131,6 +159,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startStreaming() {
+        val config = _selectedProfile.value ?: return
         val context = getApplication<Application>()
         val intent = Intent(context, StreamingService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -143,7 +172,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         startMicLoop()
 
         viewModelScope.launch(Dispatchers.IO) {
-            streamManager.startStream(_streamConfig.value)
+            streamManager.startStream(config)
             
             val musicStore = ShortArray(8192)
             var musicStoreHead = 0
@@ -166,12 +195,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val micVol = if (_micEnabled.value) _micVolume.value else 0f
                 val baseMusVol = _musicVolume.value
 
-                // Prioridade de Vinheta e Ducking de Voz
                 val vignetteActive = _isVignettePlaying.value
                 val isSpeaking = _micEnabled.value && micVuMeter.value > duckThreshold
                 
                 val targetDuck = when {
-                    vignetteActive -> 0.1f // Abaixa muito a música para a vinheta
+                    vignetteActive -> 0.1f
                     isSpeaking -> duckVolume
                     else -> 1.0f
                 }
@@ -184,7 +212,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 currentDuckFactor = currentDuckFactor.coerceIn(0.1f, 1.0f)
                 val finalMusVol = baseMusVol * currentDuckFactor
 
-                // Abastece Música
                 while ((musicStoreTail - musicStoreHead + 8192) % 8192 < actualRead) {
                     val chunk = musicPlayer.pcmQueue.poll()
                     if (chunk != null) {
@@ -198,7 +225,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                // Abastece Vinhetas
                 while ((jingleStoreTail - jingleStoreHead + 8192) % 8192 < actualRead) {
                     val chunk = vignettePlayer.pcmQueue.poll()
                     if (chunk != null) {
@@ -215,7 +241,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 for (i in 0 until actualRead) {
                     val micSample = (if (_micEnabled.value && i < lastMicReadSize) micSharedBuffer[i] else 0) * micVol
                     val musSample = musicStore[musicStoreHead] * finalMusVol
-                    val jinSample = jingleStore[jingleStoreHead] * 1.0f // Vinheta sempre 100%
+                    val jinSample = jingleStore[jingleStoreHead] * 1.0f 
                     
                     musicStoreHead = (musicStoreHead + 1) % 8192
                     jingleStoreHead = (jingleStoreHead + 1) % 8192
@@ -232,7 +258,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 
                 for (i in 10 downTo 1) {
                     _reconnectCountdown.value = i
-                    streamManager.status.value = "RECONECTANDO ($retryCount)"
+                    streamManager.status.value = "SYNC ($retryCount)"
                     kotlinx.coroutines.delay(1000)
                 }
                 
@@ -264,16 +290,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         musicPlayer.play()
     }
 
-    fun setTrackAt(index: Int, uri: Uri) {
-        val current = _playlist.value.toMutableList()
-        while (current.size <= index) {
-            current.add(Uri.EMPTY)
-        }
-        current[index] = uri
-        _playlist.value = current.take(5)
-        musicPlayer.setPlaylist(_playlist.value.filter { it != Uri.EMPTY })
-    }
-
     fun getFileName(uri: Uri): String {
         if (uri == Uri.EMPTY) return "Vazio"
         var name = "Áudio"
@@ -289,6 +305,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             name = uri.lastPathSegment ?: "Áudio"
         }
         return name.replaceBeforeLast("/", "").removePrefix("/")
+    }
+
+    fun setTrackAt(index: Int, uri: Uri) {
+        val current = _playlist.value.toMutableList()
+        while (current.size <= index) {
+            current.add(Uri.EMPTY)
+        }
+        current[index] = uri
+        _playlist.value = current.filter { it != Uri.EMPTY }.take(5)
+        musicPlayer.setPlaylist(_playlist.value)
     }
 
     fun removeTrackAt(index: Int) {

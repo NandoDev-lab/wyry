@@ -24,7 +24,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.wyry.data.StreamConfig
 import kotlinx.coroutines.delay
 import kotlin.math.*
 
@@ -45,6 +44,7 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
     val vignettes by viewModel.vignettes.collectAsState()
     val musicPosition by viewModel.musicPosition.collectAsState()
     val musicDuration by viewModel.musicDuration.collectAsState()
+    val selectedProfile by viewModel.selectedProfile.collectAsState()
 
     var activeSlotIndex by remember { mutableIntStateOf(-1) }
     var activeVignetteIndex by remember { mutableIntStateOf(-1) }
@@ -85,7 +85,14 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Adoradores Preparados Studio") },
+                title = { 
+                    val displayTitle = if (selectedProfile != null && selectedProfile!!.name.isNotBlank()) {
+                        "Studio ${selectedProfile!!.name}"
+                    } else {
+                        "Studio Wyry"
+                    }
+                    Text(displayTitle)
+                },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Configurações")
