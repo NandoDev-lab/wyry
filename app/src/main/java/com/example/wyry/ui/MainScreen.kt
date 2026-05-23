@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -21,9 +22,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.wyry.R
 import kotlinx.coroutines.delay
 import kotlin.math.*
 
@@ -90,12 +93,35 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { 
-                    val displayTitle = if (selectedProfile != null && selectedProfile!!.name.isNotBlank()) {
-                        "Studio ${selectedProfile!!.name}"
-                    } else {
-                        "Studio Wyry"
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(id = R.drawable.logo_icon),
+                            contentDescription = "Logo Wyry",
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            if (selectedProfile != null && selectedProfile!!.name.isNotBlank()) {
+                                // Se uma rádio estiver selecionada, o nome dela é o destaque
+                                Text(text = selectedProfile!!.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(
+                                    text = "Wyry - Web Your Radio Yourself",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            } else {
+                                // Título padrão quando nenhuma rádio está ativa
+                                Text(text = "Studio Wyry", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(
+                                    text = "Web Your Radio Yourself",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
                     }
-                    Text(displayTitle)
                 },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
@@ -551,7 +577,7 @@ fun MusicPlayerSection(
     viewModel: MainViewModel,
     currentSongTitle: String?,
     isPlaying: Boolean,
-    playlist: List<android.net.Uri>,
+    playlist: List<android.net.Uri?>,
     musicPosition: Long,
     musicDuration: Long,
     showTimeRemaining: Boolean,

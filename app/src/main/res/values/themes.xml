@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.Wyry" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.Wyry.Starter" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_icon</item>
+        <item name="windowSplashScreenBackground">#121212</item>
+        <item name="postSplashScreenTheme">@style/Theme.Wyry</item>
+    </style>
 </resources>

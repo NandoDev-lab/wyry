@@ -7,6 +7,7 @@ import com.arthenica.ffmpegkit.FFmpegKitConfig
 import com.arthenica.ffmpegkit.FFmpegSession
 import com.example.wyry.data.StreamConfig
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.*
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -64,6 +65,48 @@ class StreamManager(private val context: Context) {
             // Ignore
         }
         pipeOutputStream = null
+    }
+
+    fun updateMetadata(config: com.example.wyry.data.StreamConfig, metadata: String) {
+        if (!isStreaming.value) return
+        
+        val cleanMetadata = metadata.trim()
+        val encodedMetadata = java.net.URLEncoder.encode(cleanMetadata, "UTF-8")
+        val mount = if (config.mountpoint.startsWith("/")) config.mountpoint else "/${config.mountpoint}"
+        
+        // Padrão exato sugerido: mode=updinfo&mount=/stream&song=Artista+-+Musica
+        val urlString = "http://${config.host}:${config.port}/admin/metadata?" +
+                "mode=updinfo&mount=$mount&song=$encodedMetadata"
+        
+        val auth = "${config.user}:${config.pass}"
+        val encodedAuth = android.util.Base64.encodeToString(auth.toByteArray(), android.util.Base64.NO_WRAP)
+
+        @OptIn(DelicateCoroutinesApi::class)
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val url = java.net.URL(urlString)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.setRequestProperty("Authorization", "Basic $encodedAuth")
+                connection.setRequestProperty("User-Agent", "BUTT/0.1.15") 
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 5000
+                
+                val responseCode = connection.responseCode
+                Log.d("StreamManager", "Metadata Update ($cleanMetadata) -> Response: $responseCode")
+                
+                // Se der erro 401 (Não autorizado), tenta usar 'admin' como usuário
+                if (responseCode == 401 && config.user != "admin") {
+                    val adminAuth = "admin:${config.pass}"
+                    val encodedAdmin = android.util.Base64.encodeToString(adminAuth.toByteArray(), android.util.Base64.NO_WRAP)
+                    val retryConn = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
+                    retryConn.setRequestProperty("Authorization", "Basic $encodedAdmin")
+                    retryConn.setRequestProperty("User-Agent", "BUTT/0.1.15")
+                    Log.d("StreamManager", "Retry Admin Result: ${retryConn.responseCode}")
+                }
+            } catch (e: Exception) {
+                Log.e("StreamManager", "Erro na rede ao enviar metadados", e)
+            }
+        }
     }
 
     fun writeAudio(data: ShortArray, length: Int) {

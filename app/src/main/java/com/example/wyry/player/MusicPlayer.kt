@@ -65,12 +65,12 @@ class MusicPlayer(context: Context) {
         })
     }
 
-    fun setPlaylist(uris: List<Uri>) {
+    fun setPlaylist(uris: List<Uri>, titles: List<String>) {
         player.clearMediaItems()
-        val mediaItems = uris.map { uri ->
+        val mediaItems = uris.mapIndexed { index, uri ->
             MediaItem.Builder()
                 .setUri(uri)
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(uri.lastPathSegment).build())
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(titles.getOrElse(index) { "Áudio" }).build())
                 .build()
         }
         player.setMediaItems(mediaItems)

@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.core.app.ActivityCompat
@@ -17,10 +18,12 @@ import androidx.navigation.compose.rememberNavController
 import com.example.wyry.ui.MainScreen
 import com.example.wyry.ui.MainViewModel
 import com.example.wyry.ui.SettingsScreen
+import com.example.wyry.ui.SplashScreen
 import com.example.wyry.ui.theme.WyryTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         
         requestPermissions()
@@ -32,7 +35,16 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val viewModel: MainViewModel = viewModel()
                     
-                    NavHost(navController = navController, startDestination = "main") {
+                    NavHost(navController = navController, startDestination = "splash") {
+                        composable("splash") {
+                            SplashScreen(
+                                onTimeout = { 
+                                    navController.navigate("main") {
+                                        popUpTo("splash") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
                         composable("main") {
                             MainScreen(
                                 viewModel = viewModel,

@@ -32,8 +32,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedProfile = MutableStateFlow<StreamConfig?>(null)
     val selectedProfile: StateFlow<StreamConfig?> = _selectedProfile.asStateFlow()
 
-    private val _playlist = MutableStateFlow<List<Uri>>(emptyList())
-    val playlist: StateFlow<List<Uri>> = _playlist.asStateFlow()
+    private val _playlist = MutableStateFlow<List<Uri?>>(List(5) { null })
+    val playlist: StateFlow<List<Uri?>> = _playlist.asStateFlow()
 
     private val _vignettes = MutableStateFlow<List<Uri?>>(List(5) { null })
     val vignettes: StateFlow<List<Uri?>> = _vignettes.asStateFlow()
@@ -76,6 +76,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val reconnectCountdown: StateFlow<Int> = _reconnectCountdown.asStateFlow()
 
     private var audioEngineJob: Job? = null
+    private var metadataJob: Job? = null
     private var isReconnecting = false
     private val MAX_RETRY = 3
     private var retryCount = 0
@@ -92,6 +93,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             vignettePlayer.isPlaying.collectLatest { playing ->
                 _isVignettePlaying.value = playing
             }
+        }
+
+        // Carrega Playlist persistida
+        viewModelScope.launch {
+            repository.playlistFlow.first().let { uris ->
+                val uriList = uris.map { if (it.isNotBlank()) Uri.parse(it) else null }
+                _playlist.value = uriList
+                val activeUris = uriList.filterNotNull()
+                val titles = activeUris.map { getFileName(it) }
+                musicPlayer.setPlaylist(activeUris, titles)
+            }
+        }
+
+        // Carrega Vinhetas persistidas
+        viewModelScope.launch {
+            repository.vignettesFlow.first().let { uris ->
+                _vignettes.value = uris.map { if (it != null) Uri.parse(it) else null }
+            }
+        }
+
+        // Observa mudança de música para atualizar metadados na rádio
+        viewModelScope.launch {
+            currentSongTitle.collectLatest { title ->
+                if (!title.isNullOrBlank() && isStreaming.value) {
+                    _selectedProfile.value?.let { config ->
+                        streamManager.updateMetadata(config, title)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun persistUriPermission(uri: Uri) {
+        try {
+            val contentResolver = getApplication<Application>().contentResolver
+            val takeFlags: Int = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            contentResolver.takePersistableUriPermission(uri, takeFlags)
+        } catch (e: Exception) {
+            // Ignorado
         }
     }
 
@@ -174,7 +215,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                while ((jingleStoreTail - jingleStoreHead + 8192) % 8192 < read) {
+                while ((jingleStoreTail - jingleStoreHead + 8192) % 8192 < actualRead) {
                     val chunk = vignettePlayer.pcmQueue.poll()
                     if (chunk != null) {
                         for (sample in chunk) {
@@ -232,9 +273,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         streamManager.startStream(config)
         startAudioEngineIfNeeded()
+
+        // Loop de Metadados: Envio inicial com delay e repetição a cada 30s
+        metadataJob?.cancel()
+        metadataJob = viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(5000) // Espera a rádio conectar
+            while (isStreaming.value) {
+                currentSongTitle.value?.let { title ->
+                    if (title.isNotBlank()) {
+                        streamManager.updateMetadata(config, title)
+                    }
+                }
+                kotlinx.coroutines.delay(30000) // Reenvia a cada 30 segundos
+            }
+        }
     }
 
     private fun stopStreaming() {
+        metadataJob?.cancel()
         streamManager.status.value = "Desconectado"
         streamManager.stopStream()
         val context = getApplication<Application>()
@@ -269,9 +325,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playMusic(uris: List<Uri>) {
-        _playlist.value = uris.take(5) 
-        musicPlayer.setPlaylist(_playlist.value)
+        uris.forEach { persistUriPermission(it) }
+        val newPlaylist = List(5) { i -> uris.getOrNull(i) }
+        _playlist.value = newPlaylist
+        val titles = newPlaylist.filterNotNull().map { getFileName(it) }
+        musicPlayer.setPlaylist(newPlaylist.filterNotNull(), titles)
         musicPlayer.play()
+        savePlaylist()
+    }
+
+    private fun savePlaylist() {
+        viewModelScope.launch {
+            repository.savePlaylist(_playlist.value.map { it?.toString() ?: "" })
+        }
+    }
+
+    private fun saveVignettes() {
+        viewModelScope.launch {
+            repository.saveVignettes(_vignettes.value.map { it?.toString() })
+        }
     }
 
     fun getFileName(uri: Uri): String {
@@ -287,42 +359,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setTrackAt(index: Int, uri: Uri) {
+        persistUriPermission(uri)
         val current = _playlist.value.toMutableList()
-        while (current.size <= index) current.add(Uri.EMPTY)
-        current[index] = uri
-        _playlist.value = current.take(5)
-        musicPlayer.setPlaylist(_playlist.value.filter { it != Uri.EMPTY })
+        while (current.size < 5) current.add(null)
+        if (index in 0 until 5) {
+            current[index] = uri
+            _playlist.value = current
+            val activeUris = current.filterNotNull()
+            val titles = activeUris.map { getFileName(it) }
+            musicPlayer.setPlaylist(activeUris, titles)
+            savePlaylist()
+        }
     }
 
     fun removeTrackAt(index: Int) {
         val current = _playlist.value.toMutableList()
-        if (index < current.size) {
-            current.removeAt(index)
+        if (index in 0 until current.size) {
+            current[index] = null
             _playlist.value = current
-            musicPlayer.setPlaylist(_playlist.value)
+            val activeUris = current.filterNotNull()
+            val titles = activeUris.map { getFileName(it) }
+            musicPlayer.setPlaylist(activeUris, titles)
+            savePlaylist()
         }
     }
 
     fun clearPlaylist() {
-        _playlist.value = emptyList()
-        musicPlayer.setPlaylist(emptyList())
+        _playlist.value = List(5) { null }
+        musicPlayer.setPlaylist(emptyList(), emptyList())
+        savePlaylist()
     }
 
     fun setVignetteAt(index: Int, uri: Uri) {
+        persistUriPermission(uri)
         val current = _vignettes.value.toMutableList()
         current[index] = uri
         _vignettes.value = current
+        saveVignettes()
     }
 
     fun removeVignetteAt(index: Int) {
         val current = _vignettes.value.toMutableList()
         current[index] = null
         _vignettes.value = current
+        saveVignettes()
     }
 
     fun playVignette(index: Int) {
         _vignettes.value[index]?.let { uri ->
-            vignettePlayer.setPlaylist(listOf(uri))
+            vignettePlayer.setPlaylist(listOf(uri), listOf("Vinheta ${index + 1}"))
             vignettePlayer.play()
         }
     }
