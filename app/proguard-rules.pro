@@ -1,7 +1,7 @@
-# --- Proteção Wyry Studio ---
+# --- Proteção VibeCast Studio ---
 
 # Impede que nomes de classes de dados (importantes para salvar rádios) sejam renomeados
--keepclassmembers class com.nandohypesoft.wyry.data.** { *; }
+-keepclassmembers class com.nandohypesoft.vibecast.data.** { *; }
 -keepattributes RuntimeVisibleAnnotations, AnnotationDefault
 
 # Proteção para Kotlin Serialization

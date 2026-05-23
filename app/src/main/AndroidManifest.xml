@@ -14,12 +14,12 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/logo_icon"
+        android:icon="@drawable/logo_vibecast_icon"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/logo_icon"
+        android:roundIcon="@drawable/logo_vibecast_icon"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.Wyry.Starter">
+        android:theme="@style/Theme.VibeCast.Starter">
         <service
             android:name=".streaming.StreamingService"
             android:enabled="true"
@@ -29,7 +29,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Wyry">
+            android:theme="@style/Theme.VibeCast">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

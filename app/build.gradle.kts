@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.nandohypesoft.wyry"
+    namespace = "com.nandohypesoft.vibecast"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.nandohypesoft.wyry"
+        applicationId = "com.nandohypesoft.vibecast"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -20,9 +20,9 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../wyry-release.jks")
+            storeFile = file("../vibecast-release.jks")
             storePassword = "password" // Recomendado usar local.properties
-            keyAlias = "wyry-key"
+            keyAlias = "vibecast-key"
             keyPassword = "password"
         }
     }

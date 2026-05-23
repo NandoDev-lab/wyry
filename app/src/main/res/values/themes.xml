@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Wyry" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.VibeCast" parent="android:Theme.Material.Light.NoActionBar" />
 
-    <style name="Theme.Wyry.Starter" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_icon</item>
+    <style name="Theme.VibeCast.Starter" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_vibecast_icon</item>
         <item name="windowSplashScreenBackground">#121212</item>
-        <item name="postSplashScreenTheme">@style/Theme.Wyry</item>
+        <item name="postSplashScreenTheme">@style/Theme.VibeCast</item>
     </style>
 </resources>
