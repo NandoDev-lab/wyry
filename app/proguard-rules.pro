@@ -1,21 +1,29 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# --- Proteção Wyry Studio ---
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Impede que nomes de classes de dados (importantes para salvar rádios) sejam renomeados
+-keepclassmembers class com.nandohypesoft.wyry.data.** { *; }
+-keepattributes RuntimeVisibleAnnotations, AnnotationDefault
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Proteção para Kotlin Serialization
+-keepattributes *Annotation*, EnclosingMethod, Signature
+-keepclassmembers class ** {
+    @kotlinx.serialization.Serializable *;
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Proteção para FFmpegKit (não pode ofuscar chamadas nativas JNI)
+-keep class com.arthenica.ffmpegkit.** { *; }
+-keep class com.moizhassan.ffmpeg.** { *; }
+
+# Proteção para Media3/ExoPlayer
+-keep class androidx.media3.** { *; }
+
+# Remove logs de depuração automaticamente da versão final (segurança extra)
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+}
+
+# Impede a engenharia reversa de nomes de métodos sensíveis
+-repackageclasses ''
+-allowaccessmodification
