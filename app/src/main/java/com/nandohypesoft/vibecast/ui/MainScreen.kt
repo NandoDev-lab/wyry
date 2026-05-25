@@ -96,22 +96,22 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
                         Image(
                             painter = painterResource(id = R.drawable.logo_vibecast_icon),
                             contentDescription = "Logo VibeCast",
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(56.dp)
                         )
                         Spacer(Modifier.width(12.dp))
                         Column {
                             if (selectedProfile != null && selectedProfile!!.name.isNotBlank()) {
                                 Text(text = selectedProfile!!.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                 Text(
-                                    text = "VibeCast - Digital Studio",
+                                    text = "Sua Rádio tocando e você no comando",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Normal,
                                     color = MaterialTheme.colorScheme.secondary
                                 )
                             } else {
-                                Text(text = "Studio VibeCast", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(text = "VibeCast Studio", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                 Text(
-                                    text = "Digital Audio Studio",
+                                    text = "Sua Rádio tocando e você no comando",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Normal,
                                     color = MaterialTheme.colorScheme.secondary

@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.nandohypesoft.vibecast.R
 import kotlinx.coroutines.delay
 
+import androidx.compose.ui.graphics.Brush
+
 @Composable
 fun SplashScreen(onTimeout: () -> Unit) {
     var startAnimation by remember { mutableStateOf(false) }
@@ -36,30 +38,38 @@ fun SplashScreen(onTimeout: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF000000), // Preto no topo
+                        Color(0xFF0F0514), // Roxo muito escuro
+                        Color(0xFF1A0A20)  // Roxo "Vibe" profundo na base
+                    )
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
         Image(
             painter = painterResource(id = R.drawable.logo_vibecast_icon),
             contentDescription = "VibeCast Logo",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
+            modifier = Modifier.fillMaxWidth(),
+            contentScale = ContentScale.FillWidth
         )
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 50.dp),
+                .padding(bottom = 80.dp),
             verticalArrangement = Arrangement.Bottom,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
-                    .fillMaxWidth(0.8f)
-                    .height(6.dp),
+                    .fillMaxWidth(0.85f)
+                    .height(8.dp),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = Color.DarkGray
+                trackColor = Color.White.copy(alpha = 0.2f)
             )
         }
     }
