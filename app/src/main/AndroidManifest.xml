@@ -21,6 +21,12 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.VibeCast.Starter">
+
+        <!-- ID Real do VibeCast Studio AdMob -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-7917358217182228~8647573907"/>
+
         <service
             android:name=".streaming.StreamingService"
             android:enabled="true"

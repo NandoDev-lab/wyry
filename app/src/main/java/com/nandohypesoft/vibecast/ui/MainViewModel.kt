@@ -38,6 +38,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _vignettes = MutableStateFlow<List<Uri?>>(List(5) { null })
     val vignettes: StateFlow<List<Uri?>> = _vignettes.asStateFlow()
 
+    private val _adFreeExpiration = repository.adFreeExpirationFlow
+    private val _lastInterstitialTime = repository.lastInterstitialTimeFlow
+    private val _isAdmin = repository.isAdminFlow
+    val deviceId = repository.deviceIdFlow.stateIn(viewModelScope, SharingStarted.Eagerly, "...")
+
+    val isAdmin = _isAdmin.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // Bloqueia anúncios de interrupção (Intersticiais) se for Admin OU tiver tempo no cronômetro
+    val isInterstitialsBlocked = combine(_adFreeExpiration, _isAdmin) { expiration, admin ->
+        admin || expiration > System.currentTimeMillis()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    // Bloqueia Banners APENAS se for Admin
+    val isBannersBlocked = isAdmin
+
+    // Mantivemos isAdFree apenas para compatibilidade de navegação na MissionScreen
+    val isAdFree = isInterstitialsBlocked
+
+    val adFreeTimeRemaining = flow {
+        while (true) {
+            val expiration = repository.adFreeExpirationFlow.first()
+            val remaining = expiration - System.currentTimeMillis()
+            emit(if (remaining > 0) remaining else 0L)
+            kotlinx.coroutines.delay(1000)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    // Lógica de Anúncios Intersticiais (a cada 60 min se não for Pro)
+    val shouldShowInterstitial = combine(isAdFree, _lastInterstitialTime) { adFree, lastTime ->
+        if (adFree) return@combine false
+        val oneHourMillis = 60 * 60 * 1000L
+        (System.currentTimeMillis() - lastTime) >= oneHourMillis
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val isStreaming = streamManager.isStreaming
     val status = streamManager.status
     val micVuMeter = audioProcessor.vuMeter
@@ -118,6 +152,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         streamManager.updateMetadata(config, title)
                     }
                 }
+            }
+        }
+
+        checkRemoteWhitelist()
+    }
+
+    private fun checkRemoteWhitelist() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val url = java.net.URL("https://gist.githubusercontent.com/NandoDev-lab/23de62c2896b4834c2d54777a2295cb6/raw/vibecast_whitelist.txt")
+                val content = url.readText()
+                val isWhitelisted = content.contains(deviceId.value) || content.contains("UNLOCK_ALL")
+                
+                // Agora ele atualiza para TRUE ou FALSE baseado na lista
+                repository.setAdminStatus(isWhitelisted)
+            } catch (e: Exception) { 
+                // Em caso de erro de rede, mantemos o último estado salvo para não prejudicar o usuário offline
             }
         }
     }
@@ -438,6 +489,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleGate() {
         _gateEnabled.value = !_gateEnabled.value
         audioEffects.gateEnabled = _gateEnabled.value
+    }
+
+    fun login(password: String): Boolean {
+        if (password == "vibecast@admin") {
+            viewModelScope.launch {
+                repository.setAdminStatus(true)
+            }
+            return true
+        }
+        return false
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            repository.setAdminStatus(false)
+            repository.setAdFreeExpiration(0L)
+        }
+    }
+
+    fun addAdFreeTime(hours: Int) {
+        viewModelScope.launch {
+            val currentExp = repository.adFreeExpirationFlow.first()
+            val startTime = if (currentExp > System.currentTimeMillis()) currentExp else System.currentTimeMillis()
+            val newExp = startTime + (hours * 60 * 60 * 1000L)
+            repository.setAdFreeExpiration(newExp)
+            repository.setLastInterstitialTime(System.currentTimeMillis())
+        }
+    }
+
+    fun markInterstitialShown() {
+        viewModelScope.launch {
+            repository.setLastInterstitialTime(System.currentTimeMillis())
+        }
     }
 
     override fun onCleared() {

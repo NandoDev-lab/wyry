@@ -18,13 +18,19 @@ import androidx.navigation.compose.rememberNavController
 import com.nandohypesoft.vibecast.ui.MainScreen
 import com.nandohypesoft.vibecast.ui.MainViewModel
 import com.nandohypesoft.vibecast.ui.SettingsScreen
+import com.nandohypesoft.vibecast.ui.MissionScreen
+import com.nandohypesoft.vibecast.ui.LoginScreen
 import com.nandohypesoft.vibecast.ui.SplashScreen
 import com.nandohypesoft.vibecast.ui.theme.VibeCastTheme
+import com.google.android.gms.ads.MobileAds
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        
+        // Inicializar Mobile Ads SDK
+        MobileAds.initialize(this) {}
         
         requestPermissions()
         
@@ -39,8 +45,16 @@ class MainActivity : ComponentActivity() {
                         composable("splash") {
                             SplashScreen(
                                 onTimeout = { 
-                                    navController.navigate("main") {
-                                        popUpTo("splash") { inclusive = true }
+                                    // Verifica se o usuário é Pro ou tem tempo Ad-Free
+                                    val isAdFree = viewModel.isAdFree.value
+                                    if (isAdFree) {
+                                        navController.navigate("main") {
+                                            popUpTo("splash") { inclusive = true }
+                                        }
+                                    } else {
+                                        navController.navigate("mission") {
+                                            popUpTo("splash") { inclusive = true }
+                                        }
                                     }
                                 }
                             )
@@ -48,13 +62,30 @@ class MainActivity : ComponentActivity() {
                         composable("main") {
                             MainScreen(
                                 viewModel = viewModel,
-                                onNavigateToSettings = { navController.navigate("settings") }
+                                onNavigateToSettings = { navController.navigate("settings") },
+                                onNavigateToLogin = { navController.navigate("mission") }
+                            )
+                        }
+                        composable("mission") {
+                            MissionScreen(
+                                viewModel = viewModel,
+                                onComplete = { 
+                                    navController.navigate("main") {
+                                        popUpTo("mission") { inclusive = true }
+                                    }
+                                }
                             )
                         }
                         composable("settings") {
                             SettingsScreen(
                                 viewModel = viewModel,
                                 onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable("login") { // Mantida apenas para acesso Admin via código
+                            LoginScreen(
+                                viewModel = viewModel,
+                                onLoginSuccess = { navController.popBackStack() }
                             )
                         }
                     }

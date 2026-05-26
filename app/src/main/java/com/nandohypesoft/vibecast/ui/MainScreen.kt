@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,15 +27,50 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
 import com.nandohypesoft.vibecast.R
 import kotlinx.coroutines.delay
 import kotlin.math.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
+fun MainScreen(
+    viewModel: MainViewModel, 
+    onNavigateToSettings: () -> Unit,
+    onNavigateToLogin: () -> Unit
+) {
     val isStreaming by viewModel.isStreaming.collectAsState()
+    val isAdFree by viewModel.isAdFree.collectAsState()
+    val isBannersBlocked by viewModel.isBannersBlocked.collectAsState()
+    val isInterstitialsBlocked by viewModel.isInterstitialsBlocked.collectAsState()
+    val adFreeRemaining by viewModel.adFreeTimeRemaining.collectAsState()
+    val shouldShowAd by viewModel.shouldShowInterstitial.collectAsState()
     val status by viewModel.status.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isAdReady = AdManager.isAdReady
+
+    // Pré-carrega o anúncio quando entra na tela
+    LaunchedEffect(isAdReady) {
+        if (!isAdReady) {
+            AdManager.loadInterstitial(context)
+        }
+    }
+
+    // Lógica para exibir anúncio intersticial a cada 60 min se não estiver bloqueado
+    if (shouldShowAd && !isInterstitialsBlocked) {
+        LaunchedEffect(Unit) {
+            val activity = context as? android.app.Activity
+            if (activity != null) {
+                AdManager.showInterstitial(activity) {
+                    viewModel.markInterstitialShown()
+                }
+            } else {
+                viewModel.markInterstitialShown()
+            }
+        }
+    }
     val countdown by viewModel.reconnectCountdown.collectAsState()
     val micVuMeter by viewModel.micVuMeter.collectAsState()
     val musicVuMeter by viewModel.musicVuMeter.collectAsState()
@@ -121,6 +157,33 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
                     }
                 },
                 actions = {
+                    if (!isAdFree) {
+                        IconButton(onClick = onNavigateToLogin) {
+                            Icon(Icons.Default.Star, contentDescription = "Ganhar Tempo Sem Anúncios", tint = Color.Yellow)
+                        }
+                    } else if (adFreeRemaining > 0) {
+                        val hours = (adFreeRemaining / (1000 * 60 * 60))
+                        val minutes = (adFreeRemaining / (1000 * 60)) % 60
+                        val seconds = (adFreeRemaining / 1000) % 60
+                        
+                        TextButton(onClick = onNavigateToLogin) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Timer, 
+                                    contentDescription = null, 
+                                    tint = Color.Yellow,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "%02dh %02dm %02ds".format(hours, minutes, seconds),
+                                    color = Color.Yellow,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Configurações")
                     }
@@ -164,6 +227,11 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
                     onToggle = null,
                     icon = Icons.Default.MusicNote
                 )
+            }
+
+            if (!isBannersBlocked) {
+                Spacer(modifier = Modifier.height(16.dp))
+                AdBanner(AdManager.BANNER_ID)
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -222,6 +290,11 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
                 }
             }
 
+            if (!isBannersBlocked) {
+                Spacer(modifier = Modifier.height(16.dp))
+                AdBanner(AdManager.BANNER_ID)
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             StreamingControls(isStreaming, status, countdown) { viewModel.toggleStream() }
@@ -244,6 +317,11 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
                 onPlayVignette = { index -> viewModel.playVignette(index) }
             )
 
+            if (!isBannersBlocked) {
+                Spacer(modifier = Modifier.height(16.dp))
+                AdBanner(AdManager.BANNER_ID)
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             MusicPlayerSection(
@@ -264,8 +342,27 @@ fun MainScreen(viewModel: MainViewModel, onNavigateToSettings: () -> Unit) {
                 onPrevious = { viewModel.previousSong() },
                 onClear = { viewModel.clearPlaylist() }
             )
+
+            if (!isBannersBlocked) {
+                Spacer(modifier = Modifier.height(24.dp))
+                AdBanner(AdManager.BANNER_ID)
+            }
         }
     }
+}
+
+@Composable
+fun AdBanner(adUnitId: String) {
+    AndroidView(
+        modifier = Modifier.fillMaxWidth(),
+        factory = { context ->
+            AdView(context).apply {
+                setAdSize(AdSize.BANNER)
+                this.adUnitId = adUnitId
+                loadAd(com.google.android.gms.ads.AdRequest.Builder().build())
+            }
+        }
+    )
 }
 
 @Composable

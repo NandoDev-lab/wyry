@@ -26,6 +26,7 @@ import com.nandohypesoft.vibecast.data.StreamConfig
 fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val profiles by viewModel.profiles.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
+    val isAdFree by viewModel.isAdFree.collectAsState()
     var editingProfile by remember { mutableStateOf<StreamConfig?>(null) }
 
     Scaffold(
@@ -38,6 +39,11 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    if (isAdFree) {
+                        TextButton(onClick = { viewModel.logout() }) {
+                            Text("Resetar Pro", color = Color.Gray)
+                        }
+                    }
                     IconButton(onClick = { viewModel.addProfile("") }) {
                         Icon(Icons.Default.Add, contentDescription = "Adicionar")
                     }

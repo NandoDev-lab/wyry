@@ -12,8 +12,8 @@ android {
         applicationId = "com.nandohypesoft.vibecast"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.0.0"
+        versionCode = 8
+        versionName = "2.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
     implementation(libs.ffmpeg.kit)
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
